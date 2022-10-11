@@ -104,7 +104,6 @@ void processCommands(void);
 void processCommand(void);
 void addcomtent(String);
 int checknetstat(void);
-int checkinetstat(void);
 int checkbatstat(void);
 int checkstatsend(void);
 int contentsize(void);
@@ -130,18 +129,7 @@ double timersend = 0;
 
 
 
-String simei = "";
-String sunique = "";
 
-String webresponse = "";
-String webtoken = "";
-String messageid = "";
-
-int isregistered = 0;
-int smsread = 0;
-int smsbody = 0;
-
-String idstart = "";
 
 void setcontent()
 {
@@ -181,6 +169,13 @@ String getimei(int types)
   // if (types==0)
   //   addCommand("AT+CGSN#GET_IMEI", millis() + 500);
 
+  if (!isDigit(mimei.charAt(0)) || !isDigit(mimei.charAt(14))) {
+    Serial.println(mimei.charAt(0));
+     Serial.println(mimei.charAt(14));
+    Serial.println("MIMEI="+mimei+" , get imei again");
+    addCommand("AT+CGSN#GET_IMEI", millis() + 500);
+  }
+
   return mimei;
 }
 
@@ -212,7 +207,7 @@ void sendToWeb(String types, String params) {
   cont.concat("&resp=");
   //contents.unshift(cont);
   Serial.print("Add Send to Web : ");
-  //Serial.println(cont);
+  Serial.println(cont);
   //timerupdate = millis() + 1000;
   addcontentpush(cont);
 
@@ -362,7 +357,7 @@ void init_gprs()
   // timernext = millis() + 2000;
   // flagat = "INIT";
   // gprs.println("AT");
-  addCommand("AT#", millis() + 3000);
+  addCommand("ATE0#", millis() + 3000);
   // timernext = millis() + 3000;
   processCommands();
 
@@ -801,7 +796,7 @@ void processCommands()
     Serial.println("nextcommand :" + coms);
 
 
-    
+
     // timernext = millis() + 1000;
   }
 }
@@ -809,7 +804,7 @@ void processCommands()
 void processMsg(String msg)
 {
   String mssg = msg;
-  Serial.println("Message :" + mssg);
+  Serial.println(" flagat :" + flagat +", Message :" + mssg);
   // Serial.println("Flag ATs :" + flagat);
   // Serial.println("initstat :" + initstat);
   atmsg = "";
@@ -872,8 +867,21 @@ void processMsg(String msg)
 
   if (flagat == "GET_IMEI")
   {
-    flagat = "";
-    mimei = mssg;
+    if ( mssg.substring(0, 7) == "AT+CGSN" ) {
+      flagat = "GET_IMEI";
+    } else {
+      flagat = "";
+
+
+      mimei = mssg;
+      Serial.println("Imei=" + mimei);
+
+      if (!isDigit(mimei.charAt(0)) || !isDigit(mimei.charAt(14))) {
+        addCommand("AT+CGSN#GET_IMEI", millis() + 500);
+      }
+
+    }
+  
   }
 
   if (streamsms == 1 && flaglistsms <= 1 && mssg.substring(0, 6) != "+CMGL:")
@@ -908,7 +916,7 @@ void processMsg(String msg)
     lenresponse = 0;
     mssg.trim();
     textresponse = mssg;
-    // Serial.println("Response=" + textresponse);
+     Serial.println("Response=" + textresponse);
   }
 
   if (mssg.substring(0, 5) == "+CSQ:" && flagat != "CHECK_SIGNAL")
@@ -1794,7 +1802,7 @@ void Send_data()
 
     // gprs.println("AT+HTTPINIT");
 
-    Serial.println("Send data....:"); // + content);
+    Serial.println("Send data....:" + content);
     gprs.print("AT+HTTPPARA=");
     gprs.print('"');
     gprs.print("URL");

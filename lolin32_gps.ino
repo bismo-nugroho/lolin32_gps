@@ -27,6 +27,8 @@
 #define BMP280_I2C_ADDRESS  0x76
 #include "alert.h"
 #include "back.h"
+#include "icon.h"
+#include "logo.h"
 
 TFT_eSPI    tft = TFT_eSPI();         // Create object "tft"
 
@@ -123,6 +125,13 @@ Adafruit_BMP280  bmp280;
 Adafruit_MPU6050 mpu;
 
 
+String simei = "";
+String sunique = "";
+
+
+int isregistered = 0;
+
+
 
 
 //MPU6050 mpu(Wire);
@@ -146,6 +155,63 @@ int fanst = 0;
 int gprsst = 0;
 
 
+
+byte MIN_KPH = 3;
+double UPDATE_INTERVAL = 3;// every 5 seconds get save location
+int counter = 0;
+int lastcounter = -1;
+int maxcounter = 4;
+byte currentStateCLK;
+byte lastStateCLK;
+bool currentDir = 0;
+bool invert = false, invertset = false;
+bool usbdebug = false, usbdebugset = false;
+int adjhour = 7;
+int adjhourset = 7;
+int adjspeed, adjspeedset = 0;
+byte adjwarn, adjwarnset = 0;
+byte setting, saving = 0;
+String heading = "";
+float heading_cd;
+bool confsave = false; //
+double lastButtonPress = 0;
+//int lastButtonPress = 0;
+
+
+
+
+byte flipsetup = 0;
+byte flipchange = 0;
+byte flipsetupset = 0;
+bool valid_location = false;
+bool valid_time = false;
+bool buzzer = false, buzzeron = false, buzzers = true;
+bool soundon = false;
+
+double timertone = 0;
+bool soundtone = false, sound = false;
+
+char imei[15];
+char unique[16];
+
+int initimei = 0;
+int countdown = 0;
+int idxcount = 0;
+int settingload = 1;
+
+double timer, timers, blank, msg, timerb, timerupdate;
+
+
+
+String webresponse = "";
+String webtoken = "";
+String messageid = "";
+
+int smsread = 0;
+int smsbody = 0;
+
+String idstart = "";
+
 typedef struct gpsdata_struct {
   double Lat;
   double Long;
@@ -158,10 +224,41 @@ typedef struct gpsdata_struct {
   bool valid_location;
 } gpsdata_struct;
 
+
+void testSend(int params) {
+  // Serial.println("Collectiong data to send.");
+
+  if ( isDigit(simei.charAt(0)) ) {
+    String cont = "param=TEST&device[]=" + simei;
+    if ( params == 1 ) {
+      cont.concat("&end=");
+      //contents.unshift(cont);
+      // Serial.print("Data : ");
+      // Serial.println(cont);
+      timerupdate = millis();
+      addcontent(cont);
+      setcontent();
+
+    } else {
+      cont.concat("&resp=");
+      //contents.unshift(cont);
+      //Serial.print("Data : ");
+      //Serial.println(cont);
+      timerupdate = millis();
+      addcontent(cont);
+      setcontent();
+    }
+  }
+
+  //initsend();
+}
+
+
 // -------------------------------------------------------------------------
 // Setup
 // -------------------------------------------------------------------------
 void setup(void) {
+  EEPROM.begin(512);
   Serial.begin(9600);
 
   gps_setup();
@@ -187,109 +284,12 @@ void setup(void) {
 
   tft.init();
 
-  tft.setRotation(0);
+  tft.setRotation(1);
 
   tft.fillScreen(BACKGROUND);
 
 
-  /* Default settings from datasheet. */
-
-  //  bmp280.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-  //                     Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-  //                     Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-  //                     Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-  //                     Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-
-  /*
-    Wire.begin(D2, D1);  // set I2C pins [SDA = D2, SCL = D1], default clock is 100kHz
-    //Wire.begin();
-    if ( bmp280.begin(BMP280_I2C_ADDRESS) == 0 ) {
-      // connection error or device address wrong!
-      //tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);   // set text color to white and black background
-      tft.setTextSize(10);      // text size = 4
-      tft.setCursor(3, 88);    // move cursor to position (3, 88) pixel
-      tft.print("Connection");
-      tft.setCursor(63, 126);  // move cursor to position (63, 126) pixel
-      tft.print("Error");
-      while (1); // stay here
-    }
-
-
-    //  Wire.begin();
-    //  mpu.begin();
-    // display.println(F("Calculating gyro offset, do not move MPU6050"));
-    // display.display();
-    // mpu.calcGyroOffsets();
-
-
-    if (!mpu.begin()) {
-      Serial.println("Failed to find MPU6050 chip");
-      while (1) {
-        delay(10);
-      }
-    }
-
-    Serial.println("MPU6050 Found!");
-    ///*
-    mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
-    Serial.print("Accelerometer range set to: ");
-    switch (mpu.getAccelerometerRange()) {
-      case MPU6050_RANGE_2_G:
-        Serial.println("+-2G");
-        break;
-      case MPU6050_RANGE_4_G:
-        Serial.println("+-4G");
-        break;
-      case MPU6050_RANGE_8_G:
-        Serial.println("+-8G");
-        break;
-      case MPU6050_RANGE_16_G:
-        Serial.println("+-16G");
-        break;
-    }
-    mpu.setGyroRange(MPU6050_RANGE_2000_DEG);
-    Serial.print("Gyro range set to: ");
-    switch (mpu.getGyroRange()) {
-      case MPU6050_RANGE_250_DEG:
-        Serial.println("+- 250 deg/s");
-        break;
-      case MPU6050_RANGE_500_DEG:
-        Serial.println("+- 500 deg/s");
-        break;
-      case MPU6050_RANGE_1000_DEG:
-        Serial.println("+- 1000 deg/s");
-        break;
-      case MPU6050_RANGE_2000_DEG:
-        Serial.println("+- 2000 deg/s");
-        break;
-    }
-
-    mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
-    Serial.print("Filter bandwidth set to: ");
-    switch (mpu.getFilterBandwidth()) {
-      case MPU6050_BAND_260_HZ:
-        Serial.println("260 Hz");
-        break;
-      case MPU6050_BAND_184_HZ:
-        Serial.println("184 Hz");
-        break;
-      case MPU6050_BAND_94_HZ:
-        Serial.println("94 Hz");
-        break;
-      case MPU6050_BAND_44_HZ:
-        Serial.println("44 Hz");
-        break;
-      case MPU6050_BAND_21_HZ:
-        Serial.println("21 Hz");
-        break;
-      case MPU6050_BAND_10_HZ:
-        Serial.println("10 Hz");
-        break;
-      case MPU6050_BAND_5_HZ:
-        Serial.println("5 Hz");
-        break;
-    }
-  */
+  // setupAltGyro();
 
   //drawScale(120, 40);
 
@@ -298,27 +298,42 @@ void setup(void) {
   pinMode(led1, OUTPUT);
   pinMode(led2, OUTPUT);
 
+  delay(1000);
+  getSaved();
+  tft.pushImage(0, 0, 320, 240, logo_splash);
+  delay(200);
+
   //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
-  xTaskCreatePinnedToCore(
-    Task1code,   /* Task function. */
-    "Task1",     /* name of task. */
-    20000,       /* Stack size of task */
-    NULL,        /* parameter of the task */
-    1,           /* priority of the task */
-    &Task1,      /* Task handle to keep track of created task */
-    0);          /* pin task to core 0 */
-  delay(500);
+  //  xTaskCreatePinnedToCore(
+  //    Task1code,   /* Task function. */
+  //    "Task1",     /* name of task. */
+  //    20000,       /* Stack size of task */
+  //    NULL,        /* parameter of the task */
+  //    1,           /* priority of the task */
+  //    &Task1,      /* Task handle to keep track of created task */
+  //    0);          /* pin task to core 0 */
+  //  delay(500);
 
   //create a task that will be executed in the Task2code() function, with priority 1 and executed on core 1
-  xTaskCreatePinnedToCore(
-    Task2code,   /* Task function. */
-    "Task2",     /* name of task. */
-    20000,       /* Stack size of task */
-    NULL,        /* parameter of the task */
-    1,           /* priority of the task */
-    &Task2,      /* Task handle to keep track of created task */
-    1);          /* pin task to core 1 */
-  delay(500);
+  //  xTaskCreatePinnedToCore(
+  //    Task2code,   /* Task function. */
+  //    "Task2",     /* name of task. */
+  //    20000,       /* Stack size of task */
+  //    NULL,        /* parameter of the task */
+  //    1,           /* priority of the task */
+  //    &Task2,      /* Task handle to keep track of created task */
+  //    1);          /* pin task to core 1 */
+  //  delay(500);
+
+  if (isregistered == 1) {
+    //counter = 0;
+    counter = 99;
+    testSend(1);
+    countdown = 4;
+  } else {
+    counter = 99;
+    testSend(0);
+  }
 }
 
 long timerss = 0;
@@ -343,6 +358,395 @@ double yax;
 double zax;
 
 
+void setupAltGyro() {
+
+  Wire.begin(12, 11);  // set I2C pins [SDA = D2, SCL = D1], default clock is 100kHz
+  //Wire.begin();
+  if ( bmp280.begin(BMP280_I2C_ADDRESS) == 0 ) {
+    // connection error or device address wrong!
+    //tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);   // set text color to white and black background
+    tft.setTextSize(10);      // text size = 4
+    tft.setCursor(3, 88);    // move cursor to position (3, 88) pixel
+    tft.print("Connection");
+    tft.setCursor(63, 126);  // move cursor to position (63, 126) pixel
+    tft.print("Error");
+    while (1); // stay here
+  }
+
+
+
+  /* Default settings from datasheet. */
+
+  bmp280.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                     Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                     Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                     Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                     Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+
+
+  //  Wire.begin();
+  //  mpu.begin();
+  // display.println(F("Calculating gyro offset, do not move MPU6050"));
+  // display.display();
+  // mpu.calcGyroOffsets();
+
+
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+
+  Serial.println("MPU6050 Found!");
+  ///*
+  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
+  Serial.print("Accelerometer range set to: ");
+  switch (mpu.getAccelerometerRange()) {
+    case MPU6050_RANGE_2_G:
+      Serial.println("+-2G");
+      break;
+    case MPU6050_RANGE_4_G:
+      Serial.println("+-4G");
+      break;
+    case MPU6050_RANGE_8_G:
+      Serial.println("+-8G");
+      break;
+    case MPU6050_RANGE_16_G:
+      Serial.println("+-16G");
+      break;
+  }
+  mpu.setGyroRange(MPU6050_RANGE_2000_DEG);
+  Serial.print("Gyro range set to: ");
+  switch (mpu.getGyroRange()) {
+    case MPU6050_RANGE_250_DEG:
+      Serial.println("+- 250 deg/s");
+      break;
+    case MPU6050_RANGE_500_DEG:
+      Serial.println("+- 500 deg/s");
+      break;
+    case MPU6050_RANGE_1000_DEG:
+      Serial.println("+- 1000 deg/s");
+      break;
+    case MPU6050_RANGE_2000_DEG:
+      Serial.println("+- 2000 deg/s");
+      break;
+  }
+
+  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+  Serial.print("Filter bandwidth set to: ");
+  switch (mpu.getFilterBandwidth()) {
+    case MPU6050_BAND_260_HZ:
+      Serial.println("260 Hz");
+      break;
+    case MPU6050_BAND_184_HZ:
+      Serial.println("184 Hz");
+      break;
+    case MPU6050_BAND_94_HZ:
+      Serial.println("94 Hz");
+      break;
+    case MPU6050_BAND_44_HZ:
+      Serial.println("44 Hz");
+      break;
+    case MPU6050_BAND_21_HZ:
+      Serial.println("21 Hz");
+      break;
+    case MPU6050_BAND_10_HZ:
+      Serial.println("10 Hz");
+      break;
+    case MPU6050_BAND_5_HZ:
+      Serial.println("5 Hz");
+      break;
+  }
+
+}
+
+
+void getEEPROM()
+{
+  byte pos = 0;
+  byte addr = 0;
+  char unique[16];
+
+  simei = "";
+  sunique = "";
+  isregistered = 0;
+
+  adjhour = EEPROM.read(pos);
+
+  addr = sizeof(adjhour);
+  pos += addr;
+  adjspeed = EEPROM.read(pos);
+
+  addr = sizeof(adjspeed);
+  pos += addr;
+  adjwarn = EEPROM.read(pos);
+
+  addr = sizeof(adjwarn);
+  pos += addr;
+  invert = EEPROM.read(pos);
+
+  addr = sizeof(invert);
+  pos += addr;
+  usbdebug = EEPROM.read(pos);
+  usbdebug = 0;
+
+  addr = sizeof(usbdebug);
+  pos += addr;
+  flipsetup = EEPROM.read(pos);
+  //usbdebug = 1;
+  addr = sizeof(flipsetup);
+  pos += addr;
+
+  if (flipsetup != 0 && flipsetup != 1)
+    flipsetup = 0;
+
+
+
+  char byt;
+  int curpos = pos;
+
+  //866782042197190
+
+  //simei = readStringFromEEPROM(addr);
+  //pos = readPosStringFromEEPROM(addr);
+
+
+  for (int i = 0; i < 15; i++)
+  {
+    byt = EEPROM.read(pos);
+    if (isnan(byt))
+    {
+      break;
+    }
+    else
+    {
+      imei[i] = byt;
+      //simei.setCharAt(i,imei[i]);
+      simei.concat(imei[i]);
+    }
+    pos++;
+  }
+
+  //simei = String(imei);
+
+  if (curpos == pos) {
+
+  } else {
+    //pos++;
+
+    curpos = pos;
+
+    for (int i = 0; i < 16; i++)
+    {
+      byt = EEPROM.read(pos);
+      if (isnan(byt))
+      {
+        break;
+      }
+      else
+      {
+        unique[i] = byt;
+        sunique.concat(unique[i]);
+      }
+      pos++;
+    }
+
+    //sunique = String(unique);
+
+
+    Serial.println("Imei=" + simei);
+    Serial.println("Unique=" + sunique);
+
+    //if (curpos + 16 == pos) {
+    if (sunique.substring(0, 1) == "U" && sunique.substring(15, 16) == "Q") {
+      isregistered = 1;
+    } else {
+      sunique = "XXXXXXXXXXXXXXXX";
+      isregistered = 0;
+    }
+
+    //}
+
+  }
+
+  if  (  adjhour == 0)
+    adjhour = 7;
+
+  Serial.println("Imei=" + simei);
+  Serial.println("Unique=" + sunique);
+}
+
+
+
+
+void writeStringToEEPROM(int addrOffset, const String &strToWrite)
+{
+  byte len = strToWrite.length();
+  EEPROM.write(addrOffset, len);
+  for (int i = 0; i < len; i++)
+  {
+    EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
+  }
+}
+
+
+int writePosStringToEEPROM(int addrOffset, const String &strToWrite)
+{
+  int addrs = 0;
+  byte len = strToWrite.length();
+  addrs = addrOffset + 1;
+  //EEPROM.write(addrOffset, len);
+  for (int i = 0; i < len; i++)
+  {
+    //EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
+    addrs = addrOffset + 1 + i;
+  }
+
+
+  return addrs;
+}
+
+
+String readStringFromEEPROM(int addrOffset)
+{
+  int newStrLen = EEPROM.read(addrOffset);
+  char data[newStrLen + 1];
+  for (int i = 0; i < newStrLen; i++)
+  {
+    data[i] = EEPROM.read(addrOffset + 1 + i);
+  }
+  data[newStrLen] = '\ 0'; // !!! NOTE !!! Remove the space between the slash "/" and "0" (I've added a space because otherwise there is a display bug)
+  return String(data);
+}
+
+
+int readPosStringFromEEPROM(int addrOffset)
+{
+  int newStrLen = EEPROM.read(addrOffset);
+  int addrs = 0;
+  addrs = addrOffset + 1;
+  char data[newStrLen + 1];
+  for (int i = 0; i < newStrLen; i++)
+  {
+    //data[i] = EEPROM.read(addrOffset + 1 + i);
+    addrs = addrOffset + 1 + i;
+  }
+  //data[newStrLen] = '\ 0'; // !!! NOTE !!! Remove the space between the slash "/" and "0" (I've added a space because otherwise there is a display bug)
+  return addrs;
+}
+
+void putEEPROM()
+{
+
+  byte pos = 0;
+  byte addr = 0;
+
+  EEPROM.write(pos, adjhour);
+
+  addr = sizeof(adjhour);
+  pos += addr;
+  EEPROM.write(pos, adjspeed);
+
+  addr = sizeof(adjspeed);
+  pos += addr;
+  EEPROM.write(pos, adjwarn);
+
+  addr = sizeof(adjwarn);
+  pos += addr;
+  EEPROM.write(pos, invert);
+
+  addr = sizeof(invert);
+  pos += addr;
+  EEPROM.write(pos, usbdebug);
+
+  addr = sizeof(usbdebug);
+  pos += addr;
+  EEPROM.write(pos, flipsetup);
+
+  addr = sizeof(flipsetup);
+  pos += addr;
+  int lenimei = simei.length();//sizeof(imei) / sizeof(imei[0]);
+  byte byt;
+
+
+  //writeStringToEEPROM(addr, simei);
+  //addr = writePosStringToEEPROM(addr, simei);
+
+  for (int i = 0; i < 15; i++)
+  {
+
+    byt = simei.charAt(i);
+
+    EEPROM.write(pos, byt);
+    pos++;
+  }
+
+  //pos= pos+1;
+
+  int lenunique = sunique.length();
+  if ( lenunique > 16)
+    lenunique = 16;
+
+  for (int i = 0; i < lenunique; i++)
+  {
+
+    byt = sunique.charAt(i);
+
+    EEPROM.write(pos, byt);
+    pos++;
+  }
+
+
+  // Serial.println("System Unique=" + sunique);
+  if (EEPROM.commit()) {
+    //Serial.println("Data successfully committed");
+  } else {
+    // Serial.println("ERROR! Data commit failed");
+  }
+}
+
+void getSaved()
+{
+
+  getEEPROM();
+
+  //adjhour = ((isnan(adjhour)|| adjhour > 24 || adjhour < 24 )?0:adjhour);
+  if (isnan(adjhour) || adjhour > 24 || adjhour < -24)
+    adjhour = 0;
+
+  if (isnan(adjspeed) || adjspeed > 20 || adjspeed < 20)
+    adjspeed = 0;
+
+  if (isnan(adjwarn))
+    adjwarn = 0;
+
+  if (isnan(invert))
+    invert = true;
+
+  //
+  //adjwarn = 0;
+}
+
+void saveConfig()
+{
+  if (saving == 0)
+  {
+    msg = millis();
+    saving = 1;
+    adjhour = adjhourset;
+    adjspeed = adjspeedset;
+    adjwarn = adjwarnset;
+    invert = invertset;
+    usbdebug = usbdebugset;
+
+    flipchange = (flipsetup != flipsetupset ? 1 : 0);
+
+    flipsetup = flipsetupset;
+
+    putEEPROM();
+  }
+}
 
 
 
@@ -353,17 +757,8 @@ void Task1code( void * pvParameters ) {
   digitalWrite(led1, HIGH);
 
   for (;;) {
-    //gprs_handle();
-    // Serial.print("Task1 running on core ");
-    //Serial.println(xPortGetCoreID());
-    // digitalWrite(led1, HIGH);
+    task1();
 
-    // Convert raw temperature in F to Celsius degrees
-    // Serial.print("temp: ");
-    //Serial.print((temprature_sens_read() - 32) / 1.8);
-    // Serial.println(" C");
-    // delay(1000);
-    // digitalWrite(led1, LOW);
     delay(200);
   }
 }
@@ -372,113 +767,323 @@ void Task1code( void * pvParameters ) {
 void Task2code( void * pvParameters ) {
 
   for (;;) {
+    task2();
+    delay(200);
+  }
+}
 
-    gps_handle();
-
-    if (millis() - timerss > LV_DELAY) {
-
-      timerss = millis();
-      // read temperature and pressure from BMP280 sensor
-      //temp     = bmp280.readTemperature();   // get temperature
-      //pressure = bmp280.readPressure();      // get pressure
-      //float altitude = bmp280.readAltitude(1019.66);
-
-      //altitude = bmp280.readAltitude(1013.25);
+int blackinit = 0;
 
 
 
-      //mpu.update();
-      //sensors_event_t a, g, temps;
-      // mpu.getEvent(&a, &g, &temps);
-
-      //angle+=3; //Increment angle for testing
-
-      // if (angle > 359) angle = 0; // Limit angle to 360
-      // }
-      // angle = mpu.getAngleY();// - (int) ( a.acceleration.y * 10 );
-      //angles = mpu.getAngleZ();// + (int) ( a.acceleration.z * 10 );
-
-      //angle =  - (int) ( ( a.acceleration.y + g.gyro.y ) * 10 );
-      //angles =  + (int) ( ( a.acceleration.z + g.gyro.z ) * 10 );
-
-      // z = x
+void task1() {
+  gprs_handle();
 
 
+  int counts = 0;
+
+  // Until we get sentences, print a dot every 2 seconds or so
+  if (millis() - timer > 1000)
+  {
+
+    if (countdown > 0) {
+      countdown--;
+      counts = 1;
+    }
+
+    if (countdown <= 0 && ( counter == 96 || counter == 99 ) && isregistered == 1) {
+      tft.fillScreen(TFT_BLACK);
+      counts = 0;
+      counter = 0;
+    } else if (countdown <= 0 && counter == 11 && counts == 1) {
+      counter = 0;
+      //sendToWeb("UPDATE_MESSAGE", "&id=" + messageid);
+      messageid = "";
+      soundon = false;
+    }
+
+    //check saved imei;
+    if ( !isDigit(simei.charAt(0)) || !isDigit(simei.charAt(14) ) ) {
+      Serial.print("get Imei");
+      //if (initimei==0){
+      simei = getimei(0);
+
+      if (isDigit(simei.charAt(0))) {
+        putEEPROM();
+      }
+      // initimei = 1;
+      //}else
+      //  simei = getimei(1);
+    }
+
+    // gps_speed ++;
+    //  playBuzzer();
+
+    //        displaySatellitesInView();
+
+    String response = getresponse();
 
 
-      // int pitch = (atan2(a.acceleration.z, sqrt(a.acceleration.z * a.acceleration.z
+    // handling Registration
+    Serial.println("Response Web=" + response);
+    Serial.println("isregistered=" + String(isregistered));
+    if (response.substring(0, 6) == "#STAT:") {
+      if (response.substring(6, 11) == "UNREG") {
+        Serial.println("Un registered");
+        isregistered = 0;
+        if (counter == 99) {
+          counter = 98;
+          sendToWeb("CHECK", "");
+          webresponse = response.substring(6);
+        } else if (counter < 90) {
+          counter = 98;
+          sendToWeb("CHECK", "");
+          webresponse = response.substring(6);
+        }
+      } else {
+        sunique = response.substring(6);
+        isregistered = 1;
+        counter = 96;
+        countdown = 4;
+        setresponse("");
+        isregistered = 1;
+        putEEPROM();
 
-      int pitch = 30;
-      int roll = 10;
+      }
+    } else if (response.substring(0, 7) == "#CHECK:") {
+      if (counter == 98) {
 
-      angles = pitch;
-      angle = roll;
+        if (webresponse != response.substring(7)) {
+          webresponse = response.substring(7);
+          sendToWeb("CHECK", "");
+        }
+        //counter = 97;
+      }
+    } else if (response.substring(0, 7) == "#TOKEN:") {
+      if (counter == 98) {
+        webtoken = response.substring(7);
+        counter = 97;
+      }
 
-      //Serial.print("aCC x axis = "); Serial.println(a.acceleration.x);
-      // Serial.print("acc y axis = "); Serial.println(a.acceleration.y);
-      //Serial.print("acc z axis = "); Serial.println(a.acceleration.z);
+      if (counter == 97) {
+        if (webresponse != response.substring(7)) {
+          webresponse = response.substring(7);
+          sendToWeb("TCHECK", "");
+        }
+
+      }
+    }
+    else if (response.substring(0, 5) == "#REG:") {
+      webresponse = response.substring(5);
+      if (counter == 97) {
+        countdown = 4;
+        sunique = webresponse;
+        counter = 96;
+        isregistered = 1;
+        setresponse("");
+
+        putEEPROM();
+      }
+    } else if (response.substring(0, 11) == "NEW_MESSAGE") {
+      webresponse = response.substring(9);
+      if (messageid == "" && counter != 11)
+        sendToWeb("CHECK_MESSAGE", "");
+
+    }
+    else if (response.substring(0, 9) == "#MESSAGE#") {
+
+      if (counter != 11) {
+        webresponse = getStringPartByNr(response, '#', 3);
+        messageid  = getStringPartByNr(response, '#', 2);
+        sendToWeb("UPDATE_MESSAGE", "&id=" + messageid);
+        //messageid = "";
+        setresponse("");
+        counter = 11;
+      }
+    } else if (isregistered == 0 && counter > 90) {
+      if (counter == 97) {
+        if (webresponse != response.substring(7)) {
+          webresponse = response.substring(7);
+          sendToWeb("TCHECK", "");
+        }
+
+      }
+
+    }
+    timer = millis(); // reset the timer
+  }
+
+}
+
+double timerdate = 0;
+
+void task2() {
+  gps_handle();
+
+  if (millis() - timerss > LV_DELAY) {
+
+    if (millis() - timerdate > 1000) {
+      timerdate = millis();
+      setTZ();
+    }
+
+    timerss = millis();
+    // read temperature and pressure from BMP280 sensor
+    //temp     = bmp280.readTemperature();   // get temperature
+    //pressure = bmp280.readPressure();      // get pressure
+    //float altitude = bmp280.readAltitude(1019.66);
+
+    //altitude = bmp280.readAltitude(1013.25);
 
 
-      //Serial.print("pitch = "); Serial.println(pitch);
-      // Serial.print("roll = "); Serial.println(roll);
-      //Serial.print("z axis = "); Serial.println(zax);
+
+    //mpu.update();
+    //sensors_event_t a, g, temps;
+    // mpu.getEvent(&a, &g, &temps);
+
+    //angle+=3; //Increment angle for testing
+
+    // if (angle > 359) angle = 0; // Limit angle to 360
+    // }
+    // angle = mpu.getAngleY();// - (int) ( a.acceleration.y * 10 );
+    //angles = mpu.getAngleZ();// + (int) ( a.acceleration.z * 10 );
+
+    //angle =  - (int) ( ( a.acceleration.y + g.gyro.y ) * 10 );
+    //angles =  + (int) ( ( a.acceleration.z + g.gyro.z ) * 10 );
+
+    // z = x
 
 
 
 
+    // int pitch = (atan2(a.acceleration.z, sqrt(a.acceleration.z * a.acceleration.z
+
+    int pitch = 20;
+    int roll = 10;
+
+    angles = pitch;
+    angle = roll;
+
+    //Serial.print("aCC x axis = "); Serial.println(a.acceleration.x);
+    // Serial.print("acc y axis = "); Serial.println(a.acceleration.y);
+    //Serial.print("acc z axis = "); Serial.println(a.acceleration.z);
 
 
-      drawCompass(75, 70, 120, 40, angles); // Draw centre of compass at 50,50
+    //Serial.print("pitch = "); Serial.println(pitch);
+    // Serial.print("roll = "); Serial.println(roll);
+    //Serial.print("z axis = "); Serial.println(zax);
 
-      drawCompass2(75, 60, 120, 155, angle); // Draw centre of compass at 50,50
+
+
+
+    if (counter < 90) {
+
+
+      gpsdata_struct gpsdata;
+      gpsdata = getGPSData();
+
+      angles = gpsdata.satinview;
+      angle = gpsdata.satinview;
+
+      drawCompass(50, 50, 100, 40, angles); // Draw centre of compass at 50,50
+
+      drawCompass2(50, 50, 230, 40, angle); // Draw centre of compass at 50,50
 
       drawScaleSprite(120, 50, angles);
-      drawScaleSprite1(120, 50, angles);
+      //drawScaleSprite1(120, 50, angles);
 
-      drawScaleSprites(120, 40, angle);
+      //drawScaleSprites(120, 40, angle);
       drawScaleSprites1(120, 40, angle);
       drawFooterSprite(temp, altitude);
       drawGPSSprite(temp, altitude);
-      /*
 
-        tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
-        //tft.setCursor(0, 210 );
-        //tft.setTextDatum(BL_DATUM);
-        //tft.printf("%s °c ", String(temps.temperature, 1));
-
-        //tft.setCursor(158, 210 );
-        tft.setTextPadding(50);
-        tft.setTextDatum(BL_DATUM);
-        //tft.drawNumber((int) altitude);
-        //tft.printf( "%s m", String(altitude, 0) );
-        // tft.drawString( String(temps.temperature, 1), 0, 235, 4);
-        tft.drawString( String(temp, 1), 0, 235, 4);
-        tft.setTextPadding(10);
-        tft.drawString("c", 55, 235, 4);
-
-        //tft.setCursor(158, 210 );
-        tft.setTextPadding(50);
-        tft.setTextDatum(BR_DATUM);
-        //tft.drawNumber((int) altitude);
-        //tft.printf( "%s m", String(altitude, 0) );
-        tft.drawString( String(altitude, 0), 215, 235, 4);
-        tft.setTextPadding(1);
-        tft.drawString("m", 240, 235, 4);
-        // tft.drawNumber(altitude);
-        //}
-
-        //delay(WAIT);
-      */
-
-      //delay(1000);
     }
+    else if (counter == 98) {
+      if (blackinit == 0) {
+        tft.fillScreen(TFT_BLACK);
+        blackinit = 1;
+      }
+      drawImei();
 
+    }   else if (counter == 97) {
+      if (blackinit == 0) {
+        tft.fillScreen(TFT_BLACK);
+        blackinit = 1;
+      }
+      drawToken();
+
+    }   else if (counter == 96) {
+      if (blackinit == 0) {
+        tft.fillScreen(TFT_BLACK);
+        blackinit = 1;
+      }
+      drawMessage("Device telah terdaftar");
+
+    }
   }
 }
 
 void loop() {
+  task1();
+  task2();
 
 
+}
+
+void drawToken() {
+
+  //tft.setTextFont(4);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+  //tft.setCursor(0, 210 );
+  //tft.setTextDatum(BL_DATUM);
+  //tft.printf("%s °c ", String(temps.temperature, 1));
+
+  //tft.setCursor(158, 210 );
+  tft.setTextPadding(240);
+  tft.setTextDatum(TC_DATUM);
+  //tft.drawNumber((int) altitude);
+  //tft.printf( "%s m", String(altitude, 0) );
+  tft.drawString("Token :", 160, 30, 4);
+  tft.drawString( webresponse.substring(0, 5), 160, 50, 4);
+  tft.setTextPadding(240);
+
+}
+
+void drawImei() {
+
+  //tft.setTextFont(4);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+  //tft.setCursor(0, 210 );
+  //tft.setTextDatum(BL_DATUM);
+  //tft.printf("%s °c ", String(temps.temperature, 1));
+
+  //tft.setCursor(158, 210 );
+  tft.setTextPadding(100);
+  tft.setTextDatum(TC_DATUM);
+  //tft.drawNumber((int) altitude);
+  //tft.printf( "%s m", String(altitude, 0) );
+  tft.drawString("Imei :", 160, 30, 4);
+  tft.drawString( simei, 160, 50, 4);
+  tft.setTextPadding(70);
+
+}
+
+void drawMessage(String str) {
+
+  //tft.setTextFont(4);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+  //tft.setCursor(0, 210 );
+  //tft.setTextDatum(BL_DATUM);
+  //tft.printf("%s °c ", String(temps.temperature, 1));
+
+  //tft.setCursor(158, 210 );
+  tft.setTextPadding(240);
+  tft.setTextDatum(TC_DATUM);
+  //tft.drawNumber((int) altitude);
+  //tft.printf( "%s m", String(altitude, 0) );
+  //tft.drawString("Imei :", 120, 30, 4);
+  tft.drawString( str, 160, 160, 4);
+  tft.setTextPadding(240);
 
 }
 
@@ -490,46 +1095,136 @@ void loop() {
 
 void drawFooterSprite(float temp, float altitude) {
 
-
-  // img.pushSprite(posx-x, posy-y, TFT_BLACK);
-  //img.setPivot(50, 50);      // Set pivot relative to top left corner of Sprite
-  // img.deleteSprite();
-
-  ft.setColorDepth(4);
-  ft.createSprite(240, 30);
-  ft.createPalette(palette);
-  ft.fillSprite(BLACK);
-
-  //ft.setTextColor(RED, BLACK); // Text with background
+  //tft.setTextFont(4);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
   //tft.setCursor(0, 210 );
   //tft.setTextDatum(BL_DATUM);
   //tft.printf("%s °c ", String(temps.temperature, 1));
 
   //tft.setCursor(158, 210 );
-  // ft.setTextPadding(50);
-  //ft.setTextDatum(BL_DATUM);
+  tft.setTextPadding(80);
+  tft.setTextDatum(BL_DATUM);
   //tft.drawNumber((int) altitude);
   //tft.printf( "%s m", String(altitude, 0) );
-  // tft.drawString( String(temps.temperature, 1), 0, 235, 4);
-  ft.drawString( String(temp, 1) + " c", 0, 0, 4);
-  //ft.setTextPadding(10);
-  // ft.drawString("c", 55, 0, 4);
+  tft.drawString( String(temp, 1) + " c", 0, 130, 4);
+  //tft.drawString( webresponse.substring(0,5), 120, 50, 4);
 
-  //tft.setCursor(158, 210 );
-  ft.setTextPadding(70);
-  // ft.setTextDatum(BR_DATUM);
+
+  tft.setTextPadding(80);
+  tft.setTextDatum(BR_DATUM);
   //tft.drawNumber((int) altitude);
   //tft.printf( "%s m", String(altitude, 0) );
-  ft.drawString( String(altitude, 0) + " m", 170, 0, 4);
-  // ft.setTextPadding(1);
-  //ft.drawString("m", 240, 0, 4);
+  tft.drawString( String(altitude, 0) + " m", 320, 130, 4);
+  //tft.drawString( webresponse.substring(0,5), 120, 50, 4);
 
 
-  ft.pushSprite(0, 215, BLACK);
-  //ft.setPivot(120, 220);     // Set pivot to middle of TFT screen
-  //ft.pushRotated(0);
-  ft.deleteSprite();
+  //tft.setTextPadding(240);
+
+
+  /*
+
+
+    // img.pushSprite(posx-x, posy-y, TFT_BLACK);
+    //img.setPivot(50, 50);      // Set pivot relative to top left corner of Sprite
+    // img.deleteSprite();
+
+    ft.setColorDepth(4);
+    ft.createSprite(240, 30);
+    ft.createPalette(palette);
+    ft.fillSprite(BLACK);
+
+    //ft.setTextColor(RED, BLACK); // Text with background
+    //tft.setCursor(0, 210 );
+    //tft.setTextDatum(BL_DATUM);
+    //tft.printf("%s °c ", String(temps.temperature, 1));
+
+    //tft.setCursor(158, 210 );
+    // ft.setTextPadding(50);
+    //ft.setTextDatum(BL_DATUM);
+    //tft.drawNumber((int) altitude);
+    //tft.printf( "%s m", String(altitude, 0) );
+    // tft.drawString( String(temps.temperature, 1), 0, 235, 4);
+    ft.drawString( String(temp, 1) + " c", 0, 0, 4);
+    //ft.setTextPadding(10);
+    // ft.drawString("c", 55, 0, 4);
+
+    //tft.setCursor(158, 210 );
+    ft.setTextPadding(70);
+    // ft.setTextDatum(BR_DATUM);
+    //tft.drawNumber((int) altitude);
+    //tft.printf( "%s m", String(altitude, 0) );
+    ft.drawString( String(altitude, 0) + " m", 170, 0, 4);
+    // ft.setTextPadding(1);
+    //ft.drawString("m", 240, 0, 4);
+
+
+    ft.pushSprite(0, 130, BLACK);
+    //ft.setPivot(120, 220);     // Set pivot to middle of TFT screen
+    //ft.pushRotated(0);
+    ft.deleteSprite();
+  */
 }
+
+int lgetstat = -1;
+int llevel = -1;
+
+String getMonthName(String str) {
+  //  String months[] = ["","Jan"];
+  int mo = str.toInt();
+
+  switch (mo) {
+    case 1 :
+      return "Jan";
+    case 2 :
+      return "Feb";
+    case 3 :
+      return "Mar";
+    case 4 :
+      return "Apr";
+    case 5 :
+      return "May";
+    case 6 :
+      return "Jun";
+    case 7 :
+      return "July";
+    case 8 :
+      return "Aug";
+    case 9 :
+      return "Sep";
+    case 10 :
+      return "Oct";
+    case 11 :
+      return "Nov";
+    case 12 :
+      return "Dec";
+    default :
+      return "";
+  }
+
+  /*
+
+    if (str == "01")
+    return "Jan";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+    else if (str == "02")
+    return "Feb";
+
+
+    return "";
+  */
+}
+
 
 
 void drawGPSSprite(float temp, float altitude) {
@@ -538,67 +1233,195 @@ void drawGPSSprite(float temp, float altitude) {
   gpsdata_struct datagps;
   datagps = getGPSData();
 
-  // img.pushSprite(posx-x, posy-y, TFT_BLACK);
-  //img.setPivot(50, 50);      // Set pivot relative to top left corner of Sprite
-  // img.deleteSprite();
+  tft.setTextColor(TFT_WHITE, TFT_BLACK); // Text with background
+  tft.setTextPadding(200);
+  tft.setTextDatum(TC_DATUM);
 
-  fts.setColorDepth(4);
-  fts.createSprite(240, 80);
-  fts.createPalette(palette);
-  fts.fillSprite(BLACK);
+  if (datagps.valid_location) {
+    tft.drawString(String(datagps.gps_speed, 0) + "", 160, 110, 8);
 
-  //ft.setTextColor(RED, BLACK); // Text with background
-  //tft.setCursor(0, 210 );
-  //tft.setTextDatum(BL_DATUM);
-  //tft.printf("%s °c ", String(temps.temperature, 1));
 
-  // fts.setCursor(0, 0);
-  // fts.printf( "Pos:" );
-  fts.setTextPadding(240);
-  fts.setTextDatum(TC_DATUM);
-  //fts.drawNumber(get);
-  //tft.printf( "%s m", String(altitude, 0) );
-  // tft.drawString( String(temps.temperature, 1), 0, 235, 4);
-  //  fts.drawString( "pos:" + String(datagps.Lat, 5) + " ," + String(datagps.Long, 5), 0, 0, 1);
+    tft.pushImage(290, 130, 30, 30, satlock);
 
-  //fts.drawString( " " + datagps.datelocal, 0, 10, 1);
-  if (datagps.valid_location){
-    fts.drawString(" ", 120, 30, 4);
-    fts.drawString(String(datagps.gps_speed, 0) + "", 120, 0, 7);
-  }else{
-    fts.drawString("Searching....", 120, 0, 4);
-    fts.drawString("Sat in view : "+String(datagps.satinview), 120, 30, 4);
+    tft.setTextColor(TFT_GREEN, TFT_BLACK); // Text with background
+    tft.setTextPadding(50);
+    tft.setTextDatum(BR_DATUM);
+    tft.drawString(String(datagps.num_sat), 320, 190, 4);
+
+  } else {
+    tft.setTextDatum(BC_DATUM);
+
+    tft.setTextPadding(200);
+
+    if ( datagps.num_sat > 0) {
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+      tft.drawString("Waiting", 160, 140, 4);
+      tft.drawString("GPS", 160, 180, 4);
+    } else {
+      tft.setTextColor(TFT_WHITE, TFT_BLACK); // Text with background
+      tft.drawString("Searching", 160, 140, 4);
+      tft.drawString("GPS", 160, 180, 4);
+    }
+
+
+
+    tft.setTextPadding(50);
+    tft.setTextDatum(BR_DATUM);
+
+    if ( datagps.num_sat > 0) {
+      tft.pushImage(290, 130, 30, 30, satwait);
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+      tft.drawString(String(datagps.num_sat), 320, 190, 4);
+
+
+    } else {
+      tft.pushImage(290, 130, 30, 30, satdef);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK); // Text with background
+      tft.drawString(String(datagps.satinview), 320, 190, 4);
+    }
   }
 
 
-  //fts.setTextColor(GREEN, BLACK);
-  fts.setTextPadding(240);
-  fts.setTextDatum(TC_DATUM);
-  fts.drawString( " " + datagps.datelocal, 120, 55, 4);
-  //fts.drawString( "alt:" + String(datagps.alt, 0), 0, 40, 1);
-  //fts.drawString( "satused:" + String(datagps.num_sat, 0), 0, 50, 1);
-  //fts.drawString( "sat View:" + String(datagps.satinview, 0), 0, 60, 1);
-
-  //Serial.println(String(datagps.Lat, 5) + " ," + String(datagps.Long, 5));
-  //ft.setTextPadding(10);
-  // ft.drawString("c", 55, 0, 4);
-
-  //tft.setCursor(158, 210 );
-  // ft.setTextPadding(70);
-  // ft.setTextDatum(BR_DATUM);
-  //tft.drawNumber((int) altitude);
-  //tft.printf( "%s m", String(altitude, 0) );
-  //ft.drawString( String(altitude, 0)+" m", 170, 0, 4);
-  // ft.setTextPadding(1);
-  //ft.drawString("m", 240, 0, 4);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK); // Text with background
+  tft.setTextPadding(240);
+  tft.setTextDatum(TC_DATUM);
+  //tft.drawString( " " + datagps.datelocal, 160, 220, 6);
 
 
-  fts.pushSprite(0, 242, BLACK);
-  //ft.setPivot(120, 220);     // Set pivot to middle of TFT screen
-  //ft.pushRotated(0);
-  fts.deleteSprite();
+  String textmonth = getMonthName(datagps.datelocal.substring(5, 7));
+  textmonth.concat(" ");
+  textmonth.concat(datagps.datelocal.substring(8, 10));
+  tft.setTextColor(TFT_WHITE, TFT_BLACK); // Text with background
+  tft.setTextPadding(80);
+  tft.setTextDatum(BL_DATUM);
+  tft.drawString(textmonth, 0, 240, 4);
+
+  String textday = getDayName();
+
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK); // Text with background
+  tft.setTextPadding(80);
+  tft.setTextDatum(BC_DATUM);
+  tft.drawString(textday, 160, 240, 4);
+
+
+  String texthour = datagps.datelocal.substring(11, 16);
+  //2020-10-11 17:08:99
+  tft.setTextColor(TFT_GREEN, TFT_BLACK); // Text with background
+  tft.setTextPadding(80);
+  tft.setTextDatum(BR_DATUM);
+  tft.drawString(texthour, 320, 250, 6);
+
+  int level = checknetstat();
+  iconSignal(level);
+
+  int inets = checkinetstat();
+  gprsst = inets;
+  int getstat = checkstatsend();
+  iconGPRS(getstat, inets);
+
+  /*
+
+    // img.pushSprite(posx-x, posy-y, TFT_BLACK);
+    //img.setPivot(50, 50);      // Set pivot relative to top left corner of Sprite
+    // img.deleteSprite();
+
+    fts.setColorDepth(4);
+    fts.createSprite(240, 80);
+    fts.createPalette(palette);
+    fts.fillSprite(BLACK);
+
+    //ft.setTextColor(RED, BLACK); // Text with background
+    //tft.setCursor(0, 210 );
+    //tft.setTextDatum(BL_DATUM);
+    //tft.printf("%s °c ", String(temps.temperature, 1));
+
+    // fts.setCursor(0, 0);
+    // fts.printf( "Pos:" );
+    fts.setTextPadding(240);
+    fts.setTextDatum(TC_DATUM);
+    //fts.drawNumber(get);
+    //tft.printf( "%s m", String(altitude, 0) );
+    // tft.drawString( String(temps.temperature, 1), 0, 235, 4);
+    //  fts.drawString( "pos:" + String(datagps.Lat, 5) + " ," + String(datagps.Long, 5), 0, 0, 1);
+
+    //fts.drawString( " " + datagps.datelocal, 0, 10, 1);
+    if (datagps.valid_location) {
+    fts.drawString(" ", 120, 30, 4);
+    fts.drawString(String(datagps.gps_speed, 0) + "", 120, 0, 7);
+    } else {
+    fts.drawString("Searching....", 120, 0, 4);
+    fts.drawString("Sat in view : " + String(datagps.satinview), 120, 30, 4);
+    }
+
+
+    //fts.setTextColor(GREEN, BLACK);
+    fts.setTextPadding(240);
+    fts.setTextDatum(TC_DATUM);
+    fts.drawString( " " + datagps.datelocal, 120, 55, 4);
+    //fts.drawString( "alt:" + String(datagps.alt, 0), 0, 40, 1);
+    //fts.drawString( "satused:" + String(datagps.num_sat, 0), 0, 50, 1);
+    //fts.drawString( "sat View:" + String(datagps.satinview, 0), 0, 60, 1);
+
+    //Serial.println(String(datagps.Lat, 5) + " ," + String(datagps.Long, 5));
+    //ft.setTextPadding(10);
+    // ft.drawString("c", 55, 0, 4);
+
+    //tft.setCursor(158, 210 );
+    // ft.setTextPadding(70);
+    // ft.setTextDatum(BR_DATUM);
+    //tft.drawNumber((int) altitude);
+    //tft.printf( "%s m", String(altitude, 0) );
+    //ft.drawString( String(altitude, 0)+" m", 170, 0, 4);
+    // ft.setTextPadding(1);
+    //ft.drawString("m", 240, 0, 4);
+
+
+    fts.pushSprite(0, 150, BLACK);
+    //ft.setPivot(120, 220);     // Set pivot to middle of TFT screen
+    //ft.pushRotated(0);
+    fts.deleteSprite();
+  */
 }
 
+
+void iconSignal(int level) {
+
+  if (llevel != level) {
+    lgetstat = -1;
+    if (level < 1)
+      tft.pushImage(10, 130, 30, 30, signalsmall0);
+    else if ( level <= 10 )
+      tft.pushImage(10, 130, 30, 30, signalsmall1);
+    else if (level <= 20)
+      tft.pushImage(10, 130, 30, 30, signalsmall2);
+    else if (level <= 25)
+      tft.pushImage(10, 130, 30, 30, signalsmall3);
+    else
+      tft.pushImage(10, 130, 30, 30, signalsmall4);
+    llevel = level;
+  }
+}
+
+void iconGPRS(int getstat, int inets) {
+
+  if ( lgetstat != getstat ) {
+    if (getstat == 1 || getstat == 2) {
+      // u8g.setFont(u8g2_font_siji_t_6x10);
+      if (getstat == 1) {
+        tft.pushImage(0, 130, 21, 16, gprs_up1);
+      } else {
+        tft.pushImage(0, 130, 21, 16, gprs_up_down1);
+      }
+    } else {
+      if (inets == 1) {
+        tft.pushImage(0, 130, 21, 16, gprs1);
+      } else {
+        tft.pushImage(0, 130, 21, 16, no_gprs1);
+      }
+    }
+    lgetstat = getstat;
+  }
+}
 
 void drawScaleSprite(int x, int y, int angle) {
 
@@ -890,7 +1713,7 @@ void drawScaleSprites1(int x, int y, int angle) {
   }
 
   //sc1.pushSprite(0, 0, TFT_TRANSPARENT);
-  tft.setPivot(218, 165);     // Set pivot to middle of TFT screen
+  tft.setPivot(298, y);     // Set pivot to middle of TFT screen
   sc4.pushRotated(180);
   sc4.deleteSprite();
 }
@@ -953,7 +1776,7 @@ void drawCompass(int x, int y, int posx, int posy, int angle)
 {
   TSTART
   // img.setColorDepth(16);
-  //img.createSprite(150, 150);
+  //img.createSprite(100, 100);
 
   // TFT_TRANSPARENT is a special colour with reversible 8/16 bit coding
   // this allows it to be used in both 8 and 16 bit colour sprites.
@@ -982,14 +1805,18 @@ void drawCompass(int x, int y, int posx, int posy, int angle)
   // img.drawString("E",x+42,y,2);
   // img.drawString("S",x,y+42,2);
   // img.drawString("W",x-42,9,2);
-  img.pushImage(0, 25, alertWidth, alertHeight, alert);
+  //img.pushImage(0, 25, alertWidth, alertHeight, alert);
 
-  if (abs(angle) < 20)
-    img.drawCircle(x, y, 30, TFT_DARKGREY);
-  else if ( abs(angle) < 30)
-    img.drawCircle(x, y, 30, TFT_YELLOW);
-  else
-    img.drawCircle(x, y, 30, TFT_RED);
+  img.pushImage(0, 25, 102, 48, side);
+
+  /*
+    if (abs(angle) < 20)
+      img.drawCircle(x, y, 30, TFT_DARKGREY);
+    else if ( abs(angle) < 30)
+      img.drawCircle(x, y, 30, TFT_YELLOW);
+    else
+      img.drawCircle(x, y, 30, TFT_RED);
+  */
   int angl = 270;
 
   //getCoord(x - 45, y, &lx1, &ly1, NEEDLE_L, angl);
@@ -1004,7 +1831,7 @@ void drawCompass(int x, int y, int posx, int posy, int angle)
 
   img.fillCircle(x, y, 3, TFT_DARKGREY);
   img.fillCircle(x, y, 2, TFT_LIGHTGREY);
-  img.drawString(String(angle), x, y + 5, 6);
+  img.drawString(String(angle), x, y + 30, 6);
 
 
   //img.pushSprite(posx, posy, TFT_TRANSPARENT);
@@ -1063,8 +1890,15 @@ void drawCompass2(int x, int y, int posx, int posy, int angle)
   //imgs.drawString("E",x+42,y,2);
   //imgs.drawString("S",x,y+42,2);
   //imgs.drawString("W",x-42,9,2);
-  imgs.pushImage(0, 25, backWidth, backHeight, back);
-  imgs.drawCircle(x, y + 15, 30, TFT_DARKGREY);
+  imgs.pushImage(25, 25, backWidth, backHeight, back_small);
+  /*
+    if (abs(angle) < 20)
+    imgs.drawCircle(x, y, 30, TFT_DARKGREY);
+    else if ( abs(angle) < 30)
+    imgs.drawCircle(x, y, 30, TFT_YELLOW);
+    else
+    imgs.drawCircle(x, y, 30, TFT_RED);
+  */
   int angl = 90;
 
   //getCoord(x, y, &lx1, &ly1, NEEDLE_L, angl);
@@ -1076,9 +1910,9 @@ void drawCompass2(int x, int y, int posx, int posy, int angle)
   //img.fillTriangle(lx1,ly1,lx3,ly3,lx4,ly4,TFT_RED);
   //img.fillTriangle(lx2,ly2,lx3,ly3,lx4,ly4,TFT_LIGHTGREY);
 
-  imgs.fillCircle(x, y + 15, 3, TFT_DARKGREY);
-  imgs.fillCircle(x, y + 15, 2, TFT_LIGHTGREY);
-  imgs.drawString(String(angle), x, y + 20, 6);
+  imgs.fillCircle(x, y, 3, TFT_DARKGREY);
+  imgs.fillCircle(x, y, 2, TFT_LIGHTGREY);
+  imgs.drawString(String(angle), x, y + 30, 6);
 
 
   //img.pushSprite(posx, posy, TFT_TRANSPARENT);

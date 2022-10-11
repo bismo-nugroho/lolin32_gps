@@ -15,56 +15,18 @@ SoftwareSerial gps_port;//(RX_GPS, TX_GPS);
 float getLat(void);
 float getLon(void);
 String getDateTimeLoc(void);
+String getDayName(void);
+
 
 
 static const uint32_t GPSBaud = 9600;
 
 
 
-
-byte flipsetup = 0;
-byte flipchange = 0;
-byte flipsetupset = 0;
-bool valid_location = false;
-bool valid_time = false;
-bool buzzer = false, buzzeron = false, buzzers = true;
-bool soundon = false;
-
-double timertone = 0;
-bool soundtone = false, sound = false;
-
-
-
-byte MIN_KPH = 3;
-double UPDATE_INTERVAL = 3;// every 5 seconds get save location
-int counter = 0;
-int lastcounter = -1;
-int maxcounter = 4;
-byte currentStateCLK;
-byte lastStateCLK;
-bool currentDir = 0;
-bool invert = false, invertset = false;
-bool usbdebug = true, usbdebugset = false;
-int adjhour = 7;
-int adjhourset = 7;
-int adjspeed, adjspeedset = 0;
-byte adjwarn, adjwarnset = 0;
-byte setting, saving = 0;
-String heading = "";
-float heading_cd;
-bool confsave = false; //
-double lastButtonPress = 0;
-//int lastButtonPress = 0;
 byte nmea = 0;
 byte lnmea = 0;
 bool blink = false;
-char imei[15];
-char unique[16];
 
-int initimei = 0;
-int countdown = 0;
-int idxcount = 0;
-int settingload = 1;
 
 String datelocal = "";
 
@@ -114,6 +76,8 @@ const unsigned char  logo_envelope[] = {
   0xcb, 0x9d, 0x0e, 0xe3, 0x3f, 0x0e, 0x03, 0x00, 0x0e, 0xff, 0xff, 0x0f, 0xff, 0xff, 0x0f,
   0xff, 0xff, 0x0f, 0xff, 0xff, 0x0f
 };
+
+
 
 
 
@@ -208,7 +172,7 @@ byte num_sat, satinview, page, pages;
 
 //String heading;
 static NMEAGPS gps; // This parses the GPS characters
-double timer, timers, blank, msg, timerb, timerupdate;
+
 //int timer, timers, blank, msg;
 NeoGPS::time_t localTime; //(utcTime + (UTC_offset * (60 * 60)));
 
@@ -220,6 +184,55 @@ NeoGPS::time_t localTime; //(utcTime + (UTC_offset * (60 * 60)));
 //U8G2LOG u8g2log;
 
 
+
+
+
+String getDayName(){
+  switch (localTime.day)
+  {
+    case 1:  return "SUN";   break;
+    case 2:  return "MON";   break;
+    case 3:  return "TUE";   break;
+    case 4:  return "WED";   break;
+    case 5:  return "THU";;   break;
+    case 6:  return "FRI";   break;
+    default: return "SAT";
+  }
+}
+
+void setTZ()
+{
+  NeoGPS::clock_t utcTime = gps.fix().dateTime; // convert to seconds
+  localTime = (utcTime + (adjhour * (60 * 60)));
+  Serial.print("localtime");
+  Serial.println(localTime);
+/*
+ last_second = gps.time.second();
+
+        // set current UTC time
+        setTime(Hour, Minute, Second, Day, Month, Year);
+        // add the offset to get local time
+        adjustTime(time_offset);
+
+        // update time array
+        Time[0]  = hour()   / 10 + '0';
+        Time[1]  = hour()   % 10 + '0';
+        Time[3]  = minute() / 10 + '0';
+        Time[4] = minute() % 10 + '0';
+        Time[6] = second() / 10 + '0';
+        Time[7] = second() % 10 + '0';
+
+        // update date array
+        Date[0]  =  day()   / 10 + '0';
+        Date[1]  =  day()   % 10 + '0';
+        Date[3]  =  month() / 10 + '0';
+        Date[4] =  month() % 10 + '0';
+        Date[8] = (year()  / 10) % 10 + '0';
+        Date[9] =  year()  % 10 + '0';
+        // print time & date
+        print_wday(weekday());   // print day of the week
+  */
+}
 
 
 float getLat() {
@@ -430,7 +443,7 @@ void gps_handle() {
         //num_sat = gps.sat_used; //
         num_sat = fix.satellites;
         satinview = gps.sat_view;
-        Serial.println("Sat view"+String(satinview));
+        //Serial.println("Sat view"+String(satinview));
         //                                                                                                                                                                                                                                                                                                                                                       Serial.println("Sat View "+String(gps.sat_view,0));
         alt = fix.altitude_cm() / 100;
         hdop = fix.hdop;
@@ -666,7 +679,7 @@ void gps_handle() {
               //Serial.print("Data : ");
               //Serial.println(cont);
               timerupdate = millis();
-              // idxcount = addcontentsend(cont, idxcount);
+               idxcount = addcontentsend(cont, idxcount);
               lastodometer = odometer;
 
               //initsend();
