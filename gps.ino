@@ -417,6 +417,7 @@ void gps_handle() {
         // {
         //  fix.valid.speed = true;
         // }
+        
 
         valid_time = fix.valid.time;
 
