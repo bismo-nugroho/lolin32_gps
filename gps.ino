@@ -423,7 +423,9 @@ void gps_handle() {
         if (localTime.full_year() != 2000 and idstart == "") {
           idstart = getdatetime(localTime);
         }
-
+              NeoGPS::clock_t utcTime = fix.dateTime; // convert to seconds
+              localTime = (utcTime + (adjhour * (60 * 60)));
+              
         datelocal = getdatetime(localTime);
 
         String date1 = datelocal.substring(0, 10); //getStringPartByNr(dates, ' ', 0);
